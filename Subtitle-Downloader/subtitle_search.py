@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import os
 import urllib2
 import operator
 from fuzzywuzzy import process
@@ -68,11 +69,39 @@ def titleQuery(query):
     if not 'release' in result: # We got to pick from the titles
         titles_html = respSoup('div',{'class':'search-result'})[0].find_all('ul')
         titles = reduce(operator.add, [map(lambda x : x.text, [items for items in curList.find_all('a')]) for curList in titles_html])
+        links = reduce(operator.add, [map(lambda x : x['href'], [items for items in curList.find_all('a')]) for curList in titles_html])
         titles = map(lambda x : x.replace("\t", "").replace("\n", "").replace("\r", ""), titles)
+
+        title_link_dict = dict(zip(titles, links))
         print formatText("\r%d suitable titles found. Please select one"%(len(titles)), fore=FORE_CYAN, style=BOLD)
 
         selTitle = selectWithSuggestions(titles, SELECT_PROMPT)
-        print formatText("\rRequested Title : %s"%(selTitle), fore=FORE_GREEN, style=BOLD)
+        selLink = title_link_dict[selTitle]
+        print formatText("\rRequested Title : %s\n\rFetching subtitle list"%(selTitle), fore=FORE_GREEN, style=BOLD)
+
+        # Now fetch the subtitle list
+        url = 'http://subscene.com' + selLink
+        req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
+        respSoup = BeautifulSoup(urllib2.urlopen(req))
+        byFilm = respSoup('div',{'class':'subtitles byFilm'})[0]
+        subtitles = byFilm.find_all('td',{'class':'a1'})
+
+        relevantSubs = []
+        for subtitle in subtitles:
+            details = subtitle.find_all('span')
+            language = details[0].text.replace('\r', '').replace('\n', '').replace('\t', '')
+            name = details[1].text.replace('\r', '').replace('\n', '').replace('\t', '')
+            link = subtitle.find_all('a')[0]['href']
+            relevantSubs += [[language, name, link]]
+
+        relevantSubs = filter(lambda x : "English" in x[0], relevantSubs)
+        if len(relevantSubs) == 0:
+            print formatText("\r No subtitles found. Sorry!", fore=FORE_RED, style=BOLD)
+            sys.exit(1)
+
+        print formatText("\r%d English subtitles found. Please select one"%(len(relevantSubs)), fore=FORE_CYAN, style=BOLD)
+        return relevantSubs
+
 
 def enterTitle(prompt):
     inpBuf = ''
@@ -117,7 +146,7 @@ def displaySelectSuggestions(candidates, numEntries, curSelection=0):
     OUTPUT_CHANNEL.write('\r')
 
 
-def selectWithSuggestions(candidates, prompt, numEntries=5):
+def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
     inpBuf = ''
     PROMPT = prompt
     OUTPUT_CHANNEL.write('\r' + PROMPT + '\n')
@@ -140,7 +169,7 @@ def selectWithSuggestions(candidates, prompt, numEntries=5):
                 if not inpBuf:
                     candidates = initialCandidatesCopy
                 else:
-                    candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=numEntries))
+                    candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=len(candidates)))
 
             elif inpChar == TAB:
                 curSelection = (curSelection + 1) % numEntries
@@ -165,7 +194,7 @@ def selectWithSuggestions(candidates, prompt, numEntries=5):
                 if not inpBuf:
                     candidates = initialCandidatesCopy
                 else:
-                    candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=numEntries))
+                    candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=len(candidates)))
 
             OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + '\n\r')
             displaySelectSuggestions(candidates, numEntries, curSelection)
@@ -174,12 +203,15 @@ def selectWithSuggestions(candidates, prompt, numEntries=5):
             break
 
 
-    for count in xrange(numEntries):
+    for count in xrange(numEntries + 1):
         OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
 
-    moveUp(numEntries)
+    moveUp(numEntries + 1)
 
-    return candidates[curSelection]
+    if returnValues:
+        return candidates[curSelection], returnValues[curSelection]
+    else:
+        return candidates[curSelection]
 
 def subtitleSearch():
     argv = sys.argv[1:]
@@ -198,7 +230,29 @@ def subtitleSearch():
     # First take release title
     inpBuf = enterTitle(TITLE_PROMPT)
     print formatText("Requested Title : %s"%(inpBuf), fore=FORE_GREEN, style=BOLD)
-    titleQuery(inpBuf)
+
+    # Get the list of relevant english subs 
+    relevantSubs = titleQuery(inpBuf)
+    name_link_dict = dict(zip(map(lambda x : x[1], relevantSubs), map(lambda x : x[2], relevantSubs)))
+
+    # Allow the user to pick what he wants
+    selectedSub, subLink = selectWithSuggestions(map(lambda x : x[1], relevantSubs), SELECT_PROMPT, returnValues=map(lambda x : x[2], relevantSubs))
+    print formatText("\rRequested Subtitle : %s"%(selectedSub), fore=FORE_MAGENTA, style=BOLD)
+    subLink = "http://subscene.com" + subLink
+
+    # Get the actual download link now
+    url = subLink
+    req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
+    respSoup = BeautifulSoup(urllib2.urlopen(req))
+    linkElem = respSoup('div',{'class':'download'})[0]
+    linkElem = linkElem.find_all('a')[0]
+    link = linkElem['href']
+    link = "http://subscene.com" + link
+
+    # Download!
+    print "\r\n"
+    os.system("wget -O /tmp/subscene_temporary %s"%(link))
+    os.system("unar -no-directory /tmp/subscene_temporary")
 
     # restore non-raw input
     if prev_flags is not None:
