@@ -3,63 +3,94 @@
 import sys
 from select import select
 
-def main():
+# Output Channel definitions
+INPUT_CHANNEL = sys.stdin
+OUTPUT_CHANNEL = sys.stderr
+
+# Screen cursor related escapes
+MOVE_UP = '\033[F'
+
+# Keys
+RETURN = '\r'
+NEWLINE = '\n'
+BACKSPACE = '\x7f'
+
+# Colors
+DEFAULT = '\033[0m'
+
+FORE_BLACK = '\033[30m'
+FORE_RED = '\033[31m'
+FORE_GREEN = '\033[32m'
+FORE_YELLOW = '\033[33m'
+FORE_BLUE = '\033[34m'
+FORE_MAGENTA = '\033[35m'
+FORE_CYAN = '\033[36m'
+FORE_WHITE = '\033[37m'
+
+BACK_BLACK = '\033[40m'
+BACK_RED = '\033[41m'
+BACK_GREEN = '\033[42m'
+BACK_YELLOW = '\033[43m'
+BACK_BLUE = '\033[44m'
+BACK_MAGENTA = '\033[45m'
+BACK_CYAN = '\033[46m'
+BACK_WHITE = '\033[47m'
+
+# Formatting
+BOLD = '\033[1m'
+
+# Decoration
+PROMPT = ' %s%s>> %s'%(FORE_RED, BOLD, DEFAULT)
+
+def moveUp(numLines):
+    for count in xrange(numLines):
+        OUTPUT_CHANNEL.write(MOVE_UP)
+
+def formatText(text, fore="", back="", style=""):
+    return "%s%s%s"%(fore, back, style) + text + "%s"%DEFAULT
+
+def subtitleSearch():
     argv = sys.argv[1:]
-    prompt = '> '
-    max_chars = 150
 
     # set raw input mode if relevant
     # it is necessary to make stdin not wait for enter
     try:
         import tty, termios
 
-        prev_flags = termios.tcgetattr(sys.stdin.fileno())
-        tty.setraw(sys.stdin.fileno())
+        prev_flags = termios.tcgetattr(INPUT_CHANNEL.fileno())
+        tty.setraw(INPUT_CHANNEL.fileno())
     except ImportError:
         prev_flags = None
 
-    buf = ''
+    inpBuf = ''
+    OUTPUT_CHANNEL.write(PROMPT + '\r')
 
-    while True: # main loop
-        rl, wl, xl = select([sys.stdin], [], [])
+    while True: # main loop, reading input until ENTER
+        rl, wl, xl = select([INPUT_CHANNEL], [], [])
         if rl: # some input
-            c = sys.stdin.read(1)
-            # you will probably want to add some special key support
-            # for example stop on enter:
-            if c == '\n' or c == '\r':
+            inpChar = INPUT_CHANNEL.read(1)
+            if inpChar in (RETURN, NEWLINE):
                 break
 
+            if inpChar == BACKSPACE:
+                clearString = " " * (len(PROMPT) + len(inpBuf))
+                OUTPUT_CHANNEL.write(clearString + "\r")
 
-            # auto-output is disabled as well, so you need to print it
+                inpBuf = inpBuf[:-1]
 
-            if c == '\x7f':
-                sys.stderr.write((len(prompt + buf) * " ") + "\r")
-                buf = buf[:-1]
             else:
-                buf += c
+                inpBuf += inpChar
 
-            sys.stderr.write(prompt + buf + '\n')
-            sys.stderr.write('\r')
-            sys.stderr.write(buf + '\n')
-            sys.stderr.write(c + '\n')
-            sys.stderr.write('\r')
-            sys.stderr.write('\033[F')
-            sys.stderr.write('\033[F')
-            sys.stderr.write('\033[F')
-            sys.stderr.write('\r')
+            OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + '\n\r')
+            OUTPUT_CHANNEL.write(inpBuf + '\n\r')
+            moveUp(2)
+            OUTPUT_CHANNEL.write('\r')
 
-            # stop if N characters
-            if len(buf) >= max_chars:
-                break
         else:
-            # timeout
             break
 
     # restore non-raw input
     if prev_flags is not None:
-        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, prev_flags)
+        termios.tcsetattr(INPUT_CHANNEL.fileno(), termios.TCSADRAIN, prev_flags)
     # and print newline
-    sys.stderr.write('\n')
-
-    # now buf contains your input
-    # ...
+    OUTPUT_CHANNEL.write('\n')

@@ -4,6 +4,6 @@ setup(
       scripts=['subtitle_search.py'],
       entry_points = {
               'console_scripts':
-                  ['subtitle-search=subtitle_search:main']             
+                  ['subtitle-search=subtitle_search:subtitleSearch']             
       }
 )
