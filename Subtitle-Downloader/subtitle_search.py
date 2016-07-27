@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 import sys
+import urllib2
+import operator
+from bs4 import BeautifulSoup
 from select import select
 
 # Output Channel definitions
@@ -40,7 +43,8 @@ BACK_WHITE = '\033[47m'
 BOLD = '\033[1m'
 
 # Decoration
-PROMPT = ' %s%s>> %s'%(FORE_RED, BOLD, DEFAULT)
+TITLE_PROMPT = ' %s%sEnter title >> %s'%(FORE_CYAN, BOLD, DEFAULT)
+SELECT_PROMPT = ' %s%s>> %s'%(FORE_RED, BOLD, DEFAULT)
 
 def moveUp(numLines):
     for count in xrange(numLines):
@@ -49,20 +53,24 @@ def moveUp(numLines):
 def formatText(text, fore="", back="", style=""):
     return "%s%s%s"%(fore, back, style) + text + "%s"%DEFAULT
 
-def subtitleSearch():
-    argv = sys.argv[1:]
+def titleQuery(query):
+    url = 'http://subscene.com/subtitles/release?q=%s'%(query)
+    req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
+    resp = urllib2.urlopen(req)
+    respSoup = BeautifulSoup(resp.read())
+    result = resp.geturl()
 
-    # set raw input mode if relevant
-    # it is necessary to make stdin not wait for enter
-    try:
-        import tty, termios
+    if not 'release' in result: # We got to pick from the titles
+        print '\r' + "Please select title"
+        titles_html = respSoup('div',{'class':'search-result'})[0].find_all('ul')
+        titles = reduce(operator.add, [map(lambda x : x.text, [items for items in curList.find_all('a')]) for curList in titles_html])
+        titles = map(lambda x : x.replace("\t", "").replace("\n", "").replace("\r", ""), titles)
 
-        prev_flags = termios.tcgetattr(INPUT_CHANNEL.fileno())
-        tty.setraw(INPUT_CHANNEL.fileno())
-    except ImportError:
-        prev_flags = None
+        print '\r', titles
 
+def enterTitle(prompt):
     inpBuf = ''
+    PROMPT = prompt
     OUTPUT_CHANNEL.write(PROMPT + '\r')
 
     while True: # main loop, reading input until ENTER
@@ -82,15 +90,36 @@ def subtitleSearch():
                 inpBuf += inpChar
 
             OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + '\n\r')
-            OUTPUT_CHANNEL.write(inpBuf + '\n\r')
-            moveUp(2)
+            moveUp(1)
             OUTPUT_CHANNEL.write('\r')
 
         else:
             break
 
+    return inpBuf
+
+def subtitleSearch():
+    argv = sys.argv[1:]
+
+    # set raw input mode if relevant
+    # it is necessary to make stdin not wait for enter
+    try:
+        import tty, termios
+
+        prev_flags = termios.tcgetattr(INPUT_CHANNEL.fileno())
+        tty.setraw(INPUT_CHANNEL.fileno())
+    except ImportError:
+        prev_flags = None
+
+
+    # First take release title
+    inpBuf = enterTitle(TITLE_PROMPT)
+    print formatText("Requested Title : %s"%(inpBuf), fore=FORE_GREEN, style=BOLD)
+    titleQuery(inpBuf)
+
     # restore non-raw input
     if prev_flags is not None:
         termios.tcsetattr(INPUT_CHANNEL.fileno(), termios.TCSADRAIN, prev_flags)
+
     # and print newline
     OUTPUT_CHANNEL.write('\n')
