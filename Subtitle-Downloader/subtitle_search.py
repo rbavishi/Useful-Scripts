@@ -3,6 +3,7 @@
 import sys
 import urllib2
 import operator
+from fuzzywuzzy import process
 from bs4 import BeautifulSoup
 from select import select
 
@@ -12,11 +13,13 @@ OUTPUT_CHANNEL = sys.stderr
 
 # Screen cursor related escapes
 MOVE_UP = '\033[F'
+ERASE_LINE = '\x1b[2K'
 
 # Keys
 RETURN = '\r'
 NEWLINE = '\n'
 BACKSPACE = '\x7f'
+TAB = '\t'
 
 # Colors
 DEFAULT = '\033[0m'
@@ -54,6 +57,8 @@ def formatText(text, fore="", back="", style=""):
     return "%s%s%s"%(fore, back, style) + text + "%s"%DEFAULT
 
 def titleQuery(query):
+    query = query.replace(' ','%20').replace('\n', '%20').replace('\t', '%20')
+
     url = 'http://subscene.com/subtitles/release?q=%s'%(query)
     req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
     resp = urllib2.urlopen(req)
@@ -61,17 +66,18 @@ def titleQuery(query):
     result = resp.geturl()
 
     if not 'release' in result: # We got to pick from the titles
-        print '\r' + "Please select title"
         titles_html = respSoup('div',{'class':'search-result'})[0].find_all('ul')
         titles = reduce(operator.add, [map(lambda x : x.text, [items for items in curList.find_all('a')]) for curList in titles_html])
         titles = map(lambda x : x.replace("\t", "").replace("\n", "").replace("\r", ""), titles)
+        print formatText("\r%d suitable titles found. Please select one"%(len(titles)), fore=FORE_CYAN, style=BOLD)
 
-        print '\r', titles
+        selTitle = selectWithSuggestions(titles, SELECT_PROMPT)
+        print formatText("\rRequested Title : %s"%(selTitle), fore=FORE_GREEN, style=BOLD)
 
 def enterTitle(prompt):
     inpBuf = ''
     PROMPT = prompt
-    OUTPUT_CHANNEL.write(PROMPT + '\r')
+    OUTPUT_CHANNEL.write('\r' + PROMPT + '\r')
 
     while True: # main loop, reading input until ENTER
         rl, wl, xl = select([INPUT_CHANNEL], [], [])
@@ -86,7 +92,7 @@ def enterTitle(prompt):
 
                 inpBuf = inpBuf[:-1]
 
-            else:
+            elif inpChar != TAB:
                 inpBuf += inpChar
 
             OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + '\n\r')
@@ -97,6 +103,83 @@ def enterTitle(prompt):
             break
 
     return inpBuf
+
+def displaySelectSuggestions(candidates, numEntries, curSelection=0):
+    limit = min(len(candidates), numEntries)
+    for count in xrange(limit):
+        OUTPUT_CHANNEL.write('\r' + ERASE_LINE)
+        if count == curSelection:
+            OUTPUT_CHANNEL.write(formatText('\r%s\n'%(candidates[count]), fore=FORE_BLACK, back=BACK_WHITE, style=BOLD))
+        else:
+            OUTPUT_CHANNEL.write('\r%s\n'%(candidates[count]))
+
+    moveUp(limit + 1)
+    OUTPUT_CHANNEL.write('\r')
+
+
+def selectWithSuggestions(candidates, prompt, numEntries=5):
+    inpBuf = ''
+    PROMPT = prompt
+    OUTPUT_CHANNEL.write('\r' + PROMPT + '\n')
+    displaySelectSuggestions(candidates, numEntries)
+    curSelection = 0
+    initialCandidatesCopy = candidates[:]
+
+    while True: # main loop, reading input until ENTER
+        rl, wl, xl = select([INPUT_CHANNEL], [], [])
+        if rl: # some input
+            inpChar = INPUT_CHANNEL.read(1)
+            if inpChar in (RETURN, NEWLINE):
+                break
+
+            if inpChar == BACKSPACE:
+                clearString = " " * (len(PROMPT) + len(inpBuf))
+                OUTPUT_CHANNEL.write(clearString + "\r")
+
+                inpBuf = inpBuf[:-1]
+                if not inpBuf:
+                    candidates = initialCandidatesCopy
+                else:
+                    candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=numEntries))
+
+            elif inpChar == TAB:
+                curSelection = (curSelection + 1) % numEntries
+
+            elif inpChar == '>':
+                if numEntries < len(candidates):
+                    numEntries += 5
+
+            elif inpChar == '<':
+                newNumEntries = max(5, numEntries - 5)
+                for count in xrange(newNumEntries + 1):
+                    OUTPUT_CHANNEL.write("\n")
+                for count in xrange(numEntries - newNumEntries):
+                    OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
+
+                moveUp(numEntries + 1)
+                numEntries = newNumEntries
+                curSelection = curSelection % numEntries
+
+            else:
+                inpBuf += inpChar
+                if not inpBuf:
+                    candidates = initialCandidatesCopy
+                else:
+                    candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=numEntries))
+
+            OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + '\n\r')
+            displaySelectSuggestions(candidates, numEntries, curSelection)
+
+        else:
+            break
+
+
+    for count in xrange(numEntries):
+        OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
+
+    moveUp(numEntries)
+
+    return candidates[curSelection]
 
 def subtitleSearch():
     argv = sys.argv[1:]
