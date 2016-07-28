@@ -159,7 +159,7 @@ def displaySelectSuggestions(candidates, numEntries, curSelection=0):
         else:
             OUTPUT_CHANNEL.write('\r%s\n'%(candidates[count]))
 
-    moveUp(limit + 2) # To account for the prompt and border
+    moveUp(limit + 3) # To account for the prompt and border
     OUTPUT_CHANNEL.write('\r')
 
 
@@ -167,8 +167,10 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
     inpBuf = ''
     PROMPT = prompt
 
+    instructions = "===( TAB, ARROW KEYS : Navigation | > : More Suggestions | < : Less Suggestions)==="
     border = "=" * ((sum([len(candidate) for candidate in candidates])/len(candidates)) + 5)
-    OUTPUT_CHANNEL.write('\r' + PROMPT + BLINKING_CURSOR + '\n\r')
+    OUTPUT_CHANNEL.write('\r' + formatText(instructions, fore=FORE_MAGENTA) + '\n\r')
+    OUTPUT_CHANNEL.write(PROMPT + BLINKING_CURSOR + '\n\r')
     OUTPUT_CHANNEL.write(formatText(border, fore=FORE_MAGENTA) + '\n\r')
 
     displaySelectSuggestions(candidates, numEntries)
@@ -184,7 +186,10 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
 
             if inpChar == BACKSPACE:
                 clearString = " " * (len(PROMPT) + len(inpBuf))
-                OUTPUT_CHANNEL.write(clearString + "\r")
+                OUTPUT_CHANNEL.write('\r' + formatText(instructions, fore=FORE_MAGENTA) + '\n\r')
+                OUTPUT_CHANNEL.write(clearString + '\n\r')
+                OUTPUT_CHANNEL.write(formatText(border, fore=FORE_MAGENTA) + '\n\r')
+                moveUp(3)
 
                 inpBuf = inpBuf[:-1]
                 if not inpBuf:
@@ -201,21 +206,21 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
 
             elif inpChar == '<':
                 newNumEntries = max(5, numEntries - 5)
-                for count in xrange(newNumEntries + 1):
+                for count in xrange(newNumEntries + 3):
                     OUTPUT_CHANNEL.write("\n")
                 for count in xrange(numEntries - newNumEntries):
                     OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
 
-                moveUp(numEntries + 1)
+                moveUp(numEntries + 3)
                 numEntries = newNumEntries
                 curSelection = curSelection % numEntries
 
             elif inpChar == '\003':
                 limit = min(len(candidates), numEntries)
-                for count in xrange(limit + 2):
+                for count in xrange(limit + 3):
                     OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
 
-                moveUp(limit + 2)
+                moveUp(limit + 3)
 
                 raise KeyboardInterrupt
 
@@ -235,6 +240,7 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
                 else:
                     candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=len(candidates)))
 
+            OUTPUT_CHANNEL.write(formatText(instructions, fore=FORE_MAGENTA) + '\n\r')
             OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + BLINKING_CURSOR + '\n\r')
             OUTPUT_CHANNEL.write(formatText(border, fore=FORE_MAGENTA) + '\n\r')
             displaySelectSuggestions(candidates, numEntries, curSelection)
@@ -244,10 +250,10 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
 
 
     limit = min(len(candidates), numEntries)
-    for count in xrange(limit + 2):
+    for count in xrange(limit + 3):
         OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
 
-    moveUp(limit + 2)
+    moveUp(limit + 3)
 
     if returnValues:
         return candidates[curSelection], returnValues[curSelection]
