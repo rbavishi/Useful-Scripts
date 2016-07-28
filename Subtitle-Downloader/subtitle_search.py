@@ -86,21 +86,25 @@ def titleQuery(query):
         byFilm = respSoup('div',{'class':'subtitles byFilm'})[0]
         subtitles = byFilm.find_all('td',{'class':'a1'})
 
-        relevantSubs = []
-        for subtitle in subtitles:
-            details = subtitle.find_all('span')
-            language = details[0].text.replace('\r', '').replace('\n', '').replace('\t', '')
-            name = details[1].text.replace('\r', '').replace('\n', '').replace('\t', '')
-            link = subtitle.find_all('a')[0]['href']
-            relevantSubs += [[language, name, link]]
+    else:
+        contentTag = respSoup('div',{'class':'content'})[0]
+        subtitles = contentTag.find_all('td',{'class':'a1'})
 
-        relevantSubs = filter(lambda x : "English" in x[0], relevantSubs)
-        if len(relevantSubs) == 0:
-            print formatText("\r No subtitles found. Sorry!", fore=FORE_RED, style=BOLD)
-            sys.exit(1)
+    relevantSubs = []
+    for subtitle in subtitles:
+        details = subtitle.find_all('span')
+        language = details[0].text.replace('\r', '').replace('\n', '').replace('\t', '')
+        name = details[1].text.replace('\r', '').replace('\n', '').replace('\t', '')
+        link = subtitle.find_all('a')[0]['href']
+        relevantSubs += [[language, name, link]]
 
-        print formatText("\r%d English subtitles found. Please select one"%(len(relevantSubs)), fore=FORE_CYAN, style=BOLD)
-        return relevantSubs
+    relevantSubs = filter(lambda x : "English" in x[0], relevantSubs)
+    if len(relevantSubs) == 0:
+        print formatText("\r No subtitles found. Sorry!", fore=FORE_RED, style=BOLD)
+        sys.exit(1)
+
+    print formatText("\r%d English subtitles found. Please select one"%(len(relevantSubs)), fore=FORE_CYAN, style=BOLD)
+    return relevantSubs
 
 
 def enterTitle(prompt):
