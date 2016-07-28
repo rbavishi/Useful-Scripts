@@ -8,6 +8,6 @@ setup(
       install_requires=['fuzzywuzzy', 'python-Levenshtein', 'beautifulsoup4 >= 4.5.0'],
       entry_points = {
               'console_scripts':
-                  ['subtitle-search=subtitle_search:subtitleSearch']             
+                  ['subtitle-search=subtitle_search:main']             
       }
 )

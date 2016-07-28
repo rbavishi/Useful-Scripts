@@ -4,6 +4,7 @@ import sys
 import os
 import urllib2
 import operator
+import tty, termios
 from fuzzywuzzy import process
 from bs4 import BeautifulSoup
 from select import select
@@ -11,6 +12,9 @@ from select import select
 # Output Channel definitions
 INPUT_CHANNEL = sys.stdin
 OUTPUT_CHANNEL = sys.stderr
+
+# Important flags
+PREV_FLAGS = ''
 
 # Screen cursor related escapes
 MOVE_UP = '\033[F'
@@ -45,10 +49,12 @@ BACK_WHITE = '\033[47m'
 
 # Formatting
 BOLD = '\033[1m'
+BLINK = '\033[5m'
 
 # Decoration
-TITLE_PROMPT = ' %s%sEnter title >> %s'%(FORE_CYAN, BOLD, DEFAULT)
-SELECT_PROMPT = ' %s%s>> %s'%(FORE_RED, BOLD, DEFAULT)
+TITLE_PROMPT = '%s%sEnter title >> %s'%(FORE_CYAN, BOLD, DEFAULT)
+SELECT_PROMPT = '%s%s>> %s'%(FORE_RED, BOLD, DEFAULT)
+BLINKING_CURSOR = '%s%s_%s'%(BLINK, BACK_WHITE, DEFAULT)
 
 def moveUp(numLines):
     for count in xrange(numLines):
@@ -110,7 +116,7 @@ def titleQuery(query):
 def enterTitle(prompt):
     inpBuf = ''
     PROMPT = prompt
-    OUTPUT_CHANNEL.write('\r' + PROMPT + '\r')
+    OUTPUT_CHANNEL.write('\r' + PROMPT + BLINKING_CURSOR + '\r')
 
     while True: # main loop, reading input until ENTER
         rl, wl, xl = select([INPUT_CHANNEL], [], [])
@@ -125,10 +131,15 @@ def enterTitle(prompt):
 
                 inpBuf = inpBuf[:-1]
 
+            elif inpChar == '\003':
+                OUTPUT_CHANNEL.write('\n')
+                raise KeyboardInterrupt
+
             elif inpChar != TAB:
                 inpBuf += inpChar
 
-            OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + '\n\r')
+
+            OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + BLINKING_CURSOR + '\n\r')
             moveUp(1)
             OUTPUT_CHANNEL.write('\r')
 
@@ -146,14 +157,18 @@ def displaySelectSuggestions(candidates, numEntries, curSelection=0):
         else:
             OUTPUT_CHANNEL.write('\r%s\n'%(candidates[count]))
 
-    moveUp(limit + 1)
+    moveUp(limit + 2) # To account for the prompt and border
     OUTPUT_CHANNEL.write('\r')
 
 
 def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
     inpBuf = ''
     PROMPT = prompt
-    OUTPUT_CHANNEL.write('\r' + PROMPT + '\n')
+
+    border = "=" * ((sum([len(candidate) for candidate in candidates])/len(candidates)) + 5)
+    OUTPUT_CHANNEL.write('\r' + PROMPT + BLINKING_CURSOR + '\n\r')
+    OUTPUT_CHANNEL.write(formatText(border, fore=FORE_MAGENTA) + '\n\r')
+
     displaySelectSuggestions(candidates, numEntries)
     curSelection = 0
     initialCandidatesCopy = candidates[:]
@@ -193,6 +208,15 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
                 numEntries = newNumEntries
                 curSelection = curSelection % numEntries
 
+            elif inpChar == '\003':
+                limit = min(len(candidates), numEntries)
+                for count in xrange(limit + 2):
+                    OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
+
+                moveUp(limit + 2)
+
+                raise KeyboardInterrupt
+
             else:
                 inpBuf += inpChar
                 if not inpBuf:
@@ -200,35 +224,35 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
                 else:
                     candidates = map(lambda x : x[0], process.extract(inpBuf, candidates, limit=len(candidates)))
 
-            OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + '\n\r')
+            OUTPUT_CHANNEL.write(PROMPT + formatText(inpBuf, fore=FORE_YELLOW, style=BOLD) + BLINKING_CURSOR + '\n\r')
+            OUTPUT_CHANNEL.write(formatText(border, fore=FORE_MAGENTA) + '\n\r')
             displaySelectSuggestions(candidates, numEntries, curSelection)
 
         else:
             break
 
 
-    for count in xrange(numEntries + 1):
+    limit = min(len(candidates), numEntries)
+    for count in xrange(limit + 2):
         OUTPUT_CHANNEL.write("\r" + ERASE_LINE + "\n")
 
-    moveUp(numEntries + 1)
+    moveUp(limit + 2)
 
     if returnValues:
         return candidates[curSelection], returnValues[curSelection]
     else:
         return candidates[curSelection]
 
-def subtitleSearch():
-    argv = sys.argv[1:]
-
+def subtitleSearch(argv):
     # set raw input mode if relevant
     # it is necessary to make stdin not wait for enter
-    try:
-        import tty, termios
+    global PREV_FLAGS
 
-        prev_flags = termios.tcgetattr(INPUT_CHANNEL.fileno())
+    try:
+        PREV_FLAGS = termios.tcgetattr(INPUT_CHANNEL.fileno())
         tty.setraw(INPUT_CHANNEL.fileno())
     except ImportError:
-        prev_flags = None
+        PREV_FLAGS = None
 
 
     # First take release title
@@ -253,14 +277,36 @@ def subtitleSearch():
     link = linkElem['href']
     link = "http://subscene.com" + link
 
+    # Cleanup is necessary now to prevent weird output
+    cleanUp()
+
     # Download!
     print "\r\n"
     os.system("wget -O /tmp/subscene_temporary %s"%(link))
     os.system("unar -no-directory /tmp/subscene_temporary")
 
-    # restore non-raw input
-    if prev_flags is not None:
-        termios.tcsetattr(INPUT_CHANNEL.fileno(), termios.TCSADRAIN, prev_flags)
-
     # and print newline
     OUTPUT_CHANNEL.write('\n')
+
+def cleanUp():
+    # restore non-raw input
+    if PREV_FLAGS is not None:
+        termios.tcsetattr(INPUT_CHANNEL.fileno(), termios.TCSADRAIN, PREV_FLAGS)
+
+    os.system('setterm -cursor on')
+
+def main():
+    try:
+        os.system('setterm -cursor off')
+        subtitleSearch(sys.argv[1:])
+        os.system('setterm -cursor on')
+
+    except KeyboardInterrupt:
+        cleanUp()
+        print formatText("\rCancelling", fore=FORE_RED, back=BACK_BLACK, style=BOLD)
+        sys.exit(2)
+
+    except: 
+        cleanUp()
+        print formatText("\rFAILED!", fore=FORE_RED, back=BACK_BLACK, style=BOLD)
+        sys.exit(1)
