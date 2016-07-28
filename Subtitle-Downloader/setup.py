@@ -5,7 +5,7 @@ setup(
       author='Rohan Bavishi',
       author_email='rohan.bavishi95@gmail.com',
       scripts=['subtitle_search.py'],
-      install_requires=['fuzzywuzzy', 'python-Levenshtein'],
+      install_requires=['fuzzywuzzy', 'python-Levenshtein', 'beautifulsoup4 >= 4.5.0'],
       entry_points = {
               'console_scripts':
                   ['subtitle-search=subtitle_search:subtitleSearch']             

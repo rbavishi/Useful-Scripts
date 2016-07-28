@@ -63,7 +63,7 @@ def titleQuery(query):
     url = 'http://subscene.com/subtitles/release?q=%s'%(query)
     req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
     resp = urllib2.urlopen(req)
-    respSoup = BeautifulSoup(resp.read())
+    respSoup = BeautifulSoup(resp.read(), "html.parser")
     result = resp.geturl()
 
     if not 'release' in result: # We got to pick from the titles
@@ -82,7 +82,7 @@ def titleQuery(query):
         # Now fetch the subtitle list
         url = 'http://subscene.com' + selLink
         req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
-        respSoup = BeautifulSoup(urllib2.urlopen(req))
+        respSoup = BeautifulSoup(urllib2.urlopen(req), "html.parser")
         byFilm = respSoup('div',{'class':'subtitles byFilm'})[0]
         subtitles = byFilm.find_all('td',{'class':'a1'})
 
@@ -247,7 +247,7 @@ def subtitleSearch():
     # Get the actual download link now
     url = subLink
     req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
-    respSoup = BeautifulSoup(urllib2.urlopen(req))
+    respSoup = BeautifulSoup(urllib2.urlopen(req), "html.parser")
     linkElem = respSoup('div',{'class':'download'})[0]
     linkElem = linkElem.find_all('a')[0]
     link = linkElem['href']
