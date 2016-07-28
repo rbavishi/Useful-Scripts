@@ -25,6 +25,8 @@ RETURN = '\r'
 NEWLINE = '\n'
 BACKSPACE = '\x7f'
 TAB = '\t'
+UP_ARROW = '\x1b[A'
+DOWN_ARROW = '\x1b[B'
 
 # Colors
 DEFAULT = '\033[0m'
@@ -216,6 +218,15 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
                 moveUp(limit + 2)
 
                 raise KeyboardInterrupt
+
+            elif inpChar == '\x1b':
+                actualKey = INPUT_CHANNEL.read(2)
+                if actualKey == '[A': # Up Arrow
+                    curSelection = (curSelection - 1 + numEntries) % numEntries
+                elif actualKey == '[B': # Down Arrow
+                    curSelection = (curSelection + 1) % numEntries
+                elif actualKey in ['[C', '[D']:
+                    pass
 
             else:
                 inpBuf += inpChar
