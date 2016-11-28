@@ -289,10 +289,8 @@ def subtitleSearch(argv):
 
     # Allow the user to pick what he wants
     selectedSub, subLink = selectWithSuggestions(map(lambda x : x[1], relevantSubs), SELECT_PROMPT, returnValues=name_link_dict)
-    print name_link_dict[selectedSub], selectedSub
     print formatText("\rRequested Subtitle : %s"%(selectedSub), fore=FORE_MAGENTA, style=BOLD)
     subLink = "http://subscene.com" + subLink
-    print subLink
 
     # Get the actual download link now
     url = subLink
