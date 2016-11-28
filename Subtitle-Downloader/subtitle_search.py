@@ -91,19 +91,25 @@ def titleQuery(query):
         url = 'http://subscene.com' + selLink
         req = urllib2.Request(url, headers={'User-Agent':'Mozilla'})
         respSoup = BeautifulSoup(urllib2.urlopen(req), "html.parser")
-        byFilm = respSoup('div',{'class':'subtitles byFilm'})[0]
-        subtitles = byFilm.find_all('td',{'class':'a1'})
+        byFilm = respSoup('div',{'class':'content clearfix'})[0]
+        subEntries = filter(lambda x : x.find_all('td', {'class':'a1'}) != [], byFilm.find_all('tr'))
 
     else:
         contentTag = respSoup('div',{'class':'content'})[0]
-        subtitles = contentTag.find_all('td',{'class':'a1'})
+        subEntries = filter(lambda x : x.find_all('td', {'class':'a1'}) != [], contentTag.find_all('tr'))
 
     relevantSubs = []
-    for subtitle in subtitles:
-        details = subtitle.find_all('span')
+    for idx, subtitle in enumerate(subEntries):
+        details = subtitle.find_all('td', {'class':'a1'})[0].find_all('span')
         language = details[0].text.replace('\r', '').replace('\n', '').replace('\t', '')
+        link = subtitle.find_all('td', {'class':'a1'})[0].find_all('a')[0]['href']
         name = details[1].text.replace('\r', '').replace('\n', '').replace('\t', '')
-        link = subtitle.find_all('a')[0]['href']
+
+        author = subtitle.find_all('td', {'class':'a5'})[0].find_all('a')[0].text.replace("\t", "").replace("\n", "").replace("\r", "")
+        hearing_imp = " | H.I" if subtitle.find_all('td', {'class':'a41'}) else ""
+
+        name = name + formatText("[%s%s] "%(author, hearing_imp), fore=FORE_MAGENTA, style=BOLD)
+
         relevantSubs += [[language, name, link]]
 
     relevantSubs = filter(lambda x : "English" in x[0], relevantSubs)
