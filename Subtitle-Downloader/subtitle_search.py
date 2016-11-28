@@ -255,10 +255,11 @@ def selectWithSuggestions(candidates, prompt, numEntries=5, returnValues=[]):
 
     moveUp(limit + 3)
 
+    selectedCandidate = candidates[curSelection]
     if returnValues:
-        return candidates[curSelection], returnValues[curSelection]
+        return selectedCandidate, returnValues[selectedCandidate]
     else:
-        return candidates[curSelection]
+        return selectedCandidate
 
 def subtitleSearch(argv):
     # set raw input mode if relevant
@@ -281,9 +282,11 @@ def subtitleSearch(argv):
     name_link_dict = dict(zip(map(lambda x : x[1], relevantSubs), map(lambda x : x[2], relevantSubs)))
 
     # Allow the user to pick what he wants
-    selectedSub, subLink = selectWithSuggestions(map(lambda x : x[1], relevantSubs), SELECT_PROMPT, returnValues=map(lambda x : x[2], relevantSubs))
+    selectedSub, subLink = selectWithSuggestions(map(lambda x : x[1], relevantSubs), SELECT_PROMPT, returnValues=name_link_dict)
+    print name_link_dict[selectedSub], selectedSub
     print formatText("\rRequested Subtitle : %s"%(selectedSub), fore=FORE_MAGENTA, style=BOLD)
     subLink = "http://subscene.com" + subLink
+    print subLink
 
     # Get the actual download link now
     url = subLink
@@ -327,3 +330,5 @@ def main():
         cleanUp()
         print formatText("\rFAILED!", fore=FORE_RED, back=BACK_BLACK, style=BOLD)
         sys.exit(1)
+
+main()
