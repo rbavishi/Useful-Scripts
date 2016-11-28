@@ -334,5 +334,3 @@ def main():
         cleanUp()
         print formatText("\rFAILED!", fore=FORE_RED, back=BACK_BLACK, style=BOLD)
         sys.exit(1)
-
-main()
