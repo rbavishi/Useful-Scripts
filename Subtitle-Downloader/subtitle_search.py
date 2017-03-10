@@ -105,7 +105,13 @@ def titleQuery(query):
         link = subtitle.find_all('td', {'class':'a1'})[0].find_all('a')[0]['href']
         name = details[1].text.replace('\r', '').replace('\n', '').replace('\t', '')
 
-        author = subtitle.find_all('td', {'class':'a5'})[0].find_all('a')[0].text.replace("\t", "").replace("\n", "").replace("\r", "")
+        try:
+            author = subtitle.find_all('td', {'class':'a5'})[0].find_all('a')[0].text     
+        except:
+            author = subtitle.find_all('td', {'class':'a5'})[0].text
+            
+        author = author.replace("\t", "").replace("\n", "").replace("\r", "")
+
         hearing_imp = " | H.I" if subtitle.find_all('td', {'class':'a41'}) else ""
 
         name = name + formatText("[%s%s] "%(author, hearing_imp), fore=FORE_MAGENTA, style=BOLD)
@@ -333,4 +339,5 @@ def main():
     except: 
         cleanUp()
         print formatText("\rFAILED!", fore=FORE_RED, back=BACK_BLACK, style=BOLD)
+        raise
         sys.exit(1)
